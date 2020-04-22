@@ -19,9 +19,10 @@ export const logEmailSent = () => {
     })
 }
 
-export const logSmsSent = () => {
+export const logSmsSent = (serviceName: 'ovh' | 'twilio') => {
     sendLog({
         smsSent: 1,
+        serviceName: serviceName,
     })
 }
 

@@ -1,16 +1,18 @@
 import * as functions from 'firebase-functions'
 import { isEmpty } from 'lodash'
 import fetch from 'node-fetch'
-import { NotificationParams, sendEmail, sendSms } from './utils/notification'
+import { sendEmail, sendSms } from './utils/notification'
 import { logRoomCreated } from '../sumologic/sumologic'
 import { alert } from './alerts/alert'
 import { ALERT_ROOM_NOT_CREATED } from './alerts/alertList'
 import * as translations from '../translations.json'
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
+import { NotificationParams } from './interfaces/NotificationParams'
 
 const roomExpirationSeconds = 60 * 120 // = 2hr
 
 export const newCall = functions.https.onCall(async (data) => {
-    const { ovh, sendgrid, visio, app } = functions.config()
+    const { ovh, sendgrid, visio, app, twilio } = functions.config()
 
     if (isEmpty(data) || isEmpty(data.name)) {
         throw new functions.https.HttpsError(
@@ -60,6 +62,7 @@ export const newCall = functions.https.onCall(async (data) => {
             country: data.country || 'FR',
             roomUrl: room.roomUrl,
             ovhCredentials: ovh,
+            twilioCredentials: twilio,
             sendGridCredentials: sendgrid,
             emailFrom: app.emailfrom,
             lang: data.lang ? data.lang.trim().toLowerCase() : 'en',
@@ -124,7 +127,28 @@ export const triggerNotification = async (params: NotificationParams) => {
     if (!isEmpty(params.email) && !isEmpty(params.sendGridCredentials)) {
         await sendEmail(params, message, subject)
     }
-    if (!isEmpty(params.phone) && !isEmpty(params.ovhCredentials)) {
-        await sendSms(params, message)
+    if (!isEmpty(params.phone)) {
+        const phoneNumber = parsePhoneNumberFromString(
+            params.phone,
+            params.country as any
+        )
+
+        if (!phoneNumber) {
+            console.log(
+                `Warn: phone number parsing failed, country: ${params.country}`
+            )
+
+            throw new functions.https.HttpsError(
+                'invalid-argument',
+                'Fail to parse the phone number'
+            )
+        }
+
+        await sendSms({
+            messageBody: message,
+            internationalPhoneNumber: phoneNumber.formatInternational(),
+            twilioCredentials: params.twilioCredentials,
+            ovhCredentials: params.ovhCredentials,
+        })
     }
 }

@@ -14,3 +14,11 @@ export const ALERT_OVH_SMS_QUOTA_REACHED = {
     tags: ['OverwriteQuietHours', 'Critical', 'sms'],
     priority: 'P1',
 }
+
+export const ALERT_TWILIO_SMS_OTHER = {
+    message: 'TWILIO SMS Error',
+    alias: 'sms-twilio-error',
+    description: 'Something not expected happened on Twilio: ',
+    tags: ['OverwriteQuietHours', 'Critical', 'sms'],
+    priority: 'P1',
+}

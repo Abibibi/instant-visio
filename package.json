@@ -35,7 +35,8 @@
         "build": "react-scripts build",
         "test": "react-scripts test",
         "eject": "react-scripts eject",
-        "deploy": "npm run build && firebase deploy --only hosting"
+        "deploy:prod": "npm run build && firebase deploy --only hosting",
+        "deploy:dev": "env-cmd -f .env.developement && firebase use instantvisio-dev &&  npm run build && firebase deploy --only hosting"
     },
     "eslintConfig": {
         "extends": "react-app"
@@ -54,6 +55,7 @@
     },
     "devDependencies": {
         "babel-eslint": "^10.0.3",
+        "env-cmd": "^10.1.0",
         "eslint": "^6.8.0",
         "eslint-plugin-react": "^7.19.0",
         "firebase-tools": "^7.15.1",

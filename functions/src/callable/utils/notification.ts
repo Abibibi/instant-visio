@@ -1,31 +1,11 @@
-import * as functions from 'firebase-functions'
 import * as sgMail from '@sendgrid/mail'
-import * as ovh from 'ovh'
-import { logEmailSent, logSmsSent } from '../../sumologic/sumologic'
-import { parsePhoneNumberFromString } from 'libphonenumber-js'
-import { alert } from '../alerts/alert'
-import { ALERT_OVH_SMS_QUOTA_REACHED } from '../alerts/alertList'
-
-export interface OVHCredentials {
-    consumerkey: string
-    appsecret: string
-    appkey: string
-    servicename: string
-}
-
-export interface NotificationParams {
-    name: string
-    email: string
-    phone: string
-    roomUrl: string
-    country: string
-    emailFrom: string
-    lang: string
-    ovhCredentials: OVHCredentials
-    sendGridCredentials: {
-        apikey: string
-    }
-}
+import { logEmailSent } from '../../sumologic/sumologic'
+import { sendSmsViaOVH } from './sms/ovh'
+import { sendSmsViaTwilio } from './sms/twilio'
+import * as functions from 'firebase-functions'
+import { isEmpty } from 'lodash'
+import { NotificationParams } from '../interfaces/NotificationParams'
+import { SMSParams } from '../interfaces/SMSParams'
 
 export const sendEmail = async (
     params: NotificationParams,
@@ -59,71 +39,26 @@ export const sendEmail = async (
     return Promise.reject('Failed to send email')
 }
 
-export const sendSms = async (
-    params: NotificationParams,
-    messageBody: string
-) => {
-    const ovhInstance = ovh({
-        appKey: params.ovhCredentials.appkey,
-        appSecret: params.ovhCredentials.appsecret,
-        consumerKey: params.ovhCredentials.consumerkey,
-    })
+export const sendSms = (params: SMSParams) => {
+    const ovhCredentialsOk = !isEmpty(params.ovhCredentials)
+    const twilioCredentialsOk = !isEmpty(params.twilioCredentials)
 
-    const phoneNumber = parsePhoneNumberFromString(
-        params.phone,
-        params.country as any
-    )
-
-    if (!phoneNumber) {
-        console.log(
-            `Warn: phone number parsing failed, country: ${params.country}`
-        )
-        return Promise.reject('Phone number parsing failed')
+    if (ovhCredentialsOk) {
+        return sendSmsViaOVH(params).catch((error) => {
+            if (error.code === 'resource-exhausted' && twilioCredentialsOk) {
+                console.warn('OVH SMS Exhausted, fallbacking to twilio')
+                return sendSmsViaTwilio(params)
+            }
+            return error
+        })
     }
 
-    return ovhInstance
-        .requestPromised(
-            'POST',
-            `/sms/${params.ovhCredentials.servicename}/jobs`,
-            {
-                message: messageBody,
-                noStopClause: true,
-                receivers: [phoneNumber.formatInternational()],
-                sender: 'VisioPhone',
-                priority: 'high',
-                validityPeriod: 30, // 30 min
-            }
-        )
-        .then((result: any) => {
-            console.log('sms sent')
-            logSmsSent()
-        })
-        .catch((error: any) => {
-            console.error('Fail to send sms', error)
-            if (error.error && error.error === 402) {
-                alert(ALERT_OVH_SMS_QUOTA_REACHED)
-                throw new functions.https.HttpsError(
-                    'resource-exhausted',
-                    '402'
-                )
-            }
-            throw new functions.https.HttpsError('unknown', error.message)
-        })
-}
+    if (twilioCredentialsOk) {
+        return sendSmsViaTwilio(params)
+    }
 
-// To get new credentials, we first need to use this method, then open the given url and authentificate manually
-// (mind the expiration delay)
-//
-// const getNewOVHConsumerKey = (ovhInstance:any) => {
-//     ovhInstance.requestPromised('POST', '/auth/credential', {
-//         'accessRules': [
-//             {'method': 'POST', 'path': '/sms/*/jobs'},
-//             {'method': 'GET', 'path': '/sms/*/outgoing'},
-//             {'method': 'DELETE', 'path': '/sms/*/outgoing/*'}
-//         ]
-//     }).then((credential: any) => {
-//         console.log('auth success, open the url below to validate them', credential)
-//     }).catch((error: any) => {
-//         console.log('auth error', error)
-//     })
-// }
+    throw new functions.https.HttpsError(
+        'failed-precondition',
+        'Config missing for OVH or Twilio in order to send the SMS'
+    )
+}

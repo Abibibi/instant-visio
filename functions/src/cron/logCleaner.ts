@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions'
-import { OVHCredentials } from '../callable/utils/notification'
 import * as ovh from 'ovh'
 import { isEmpty } from 'lodash'
+import { OVHCredentials } from '../callable/interfaces/OVHCredentials'
 
 export const logCleaner = functions.pubsub
     // Every day at 03:00 CET
