@@ -1,0 +1,32 @@
+name: Build android apk
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [10.x]
+    steps:
+    - uses: actions/checkout@v1
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    - name: npm install, build
+      run: |
+        npm ci
+        npm run jetifier
+        npm run build && npx cap sync android && npx cap copy android && bash -c 'cd android && ./gradlew assembleDebug'
+      env:
+        REACT_APP_APPID: ${{ secrets.REACT_APP_APPID }}
+        REACT_APP_API_KEY: ${{ secrets.REACT_APP_API_KEY }}
+        REACT_APP_AUTH_DOMAIN: ${{ secrets.REACT_APP_AUTH_DOMAIN }}
+        REACT_APP_DATABASE_URL: ${{ secrets.REACT_APP_DATABASE_URL }}
+        REACT_APP_PROJECT_ID: ${{ secrets.REACT_APP_PROJECT_ID }}
+        REACT_APP_MEASUREMENT_ID: ${{ secrets.REACT_APP_MEASUREMENT_ID }}
+        REACT_APP_COOKIEBOT_ID: ${{ secrets.REACT_APP_COOKIEBOT_ID }}
+        REACT_APP_AUTH_EMULATOR_ENABLED: ${{ secrets.REACT_APP_AUTH_EMULATOR_ENABLED }}
+        REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+        REACT_APP_SET_AUTH: ${{ secrets.REACT_APP_SET_AUTH }}
